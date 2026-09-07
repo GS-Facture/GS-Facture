@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
+<title>Factures</title>
+
+<!-- PWA : installation comme vraie app mobile -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2C4A6E">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Factures">
+<link rel="apple-touch-icon" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+  :root{
+    --bg:#F1EFE8;
+    --ink:#1D2420;
+    --ink-soft:#5B6058;
+    --blue:#2C4A6E;
+    --orange:#C86428;
+    --green:#4C7A52;
+    --red:#B23A2E;
+    --line:#D6D0C3;
+    --card:#FBFAF6;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    background:var(--bg);
+    color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    overscroll-behavior-y:contain;
+  }
+  .num{
+    font-family:"Arial Narrow",-apple-system,sans-serif;
+    font-weight:800;
+    letter-spacing:0.01em;
+  }
+  #app{
+    max-width:520px;
+    margin:0 auto;
+    min-height:100vh;
+    display:flex;
+    flex-direction:column;
+    background:var(--bg);
+  }
+
+  /* ---- App bar ---- */
+  .appbar{
+    position:sticky; top:0; z-index:20;
+    background:var(--bg);
+    padding:18px 18px 14px;
+    border-bottom:2px solid var(--ink);
+  }
+  .appbar-row{display:flex; align-items:flex-start; justify-content:space-between;}
+  .brand{
+    font-family:"Arial Narrow",-apple-system,sans-serif;
+    font-weight:800;
+    font-size:26px;
+    letter-spacing:0.01em;
+  }
+  .brand small{
+    display:block;
+    font-family:-apple-system,sans-serif;
+    font-weight:400;
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin-top:2px;
+    letter-spacing:0;
+  }
+  .back-btn{
+    background:none;border:none;color:var(--blue);
+    font-size:15px; font-weight:600; padding:6px 0; cursor:pointer;
+  }
+  .icon-btn{
+    background:none; border:2px solid var(--ink); color:var(--ink);
+    width:38px; height:38px; border-radius:50%; font-size:16px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .icon-btn:active{background:var(--ink); color:#fff;}
+  .install-banner{
+    display:none; align-items:center; justify-content:space-between; gap:10px;
+    background:var(--blue); color:#fff; padding:10px 14px; font-size:13px;
+    margin:12px 18px 0; border-radius:2px;
+  }
+  .install-banner.show{display:flex;}
+  .install-banner button{
+    background:#fff; color:var(--blue); border:none; padding:8px 12px; font-weight:700;
+    font-size:12.5px; border-radius:2px; cursor:pointer; flex-shrink:0;
+  }
+  .install-banner .close-x{background:none; color:#fff; font-size:16px; padding:0 4px;}
+
+  /* ---- List view ---- */
+  .search-wrap{padding:14px 18px 4px;}
+  .search{
+    width:100%; padding:11px 14px; border:2px solid var(--line);
+    border-radius:2px; font-size:15px; background:var(--card); color:var(--ink);
+  }
+  .search:focus{outline:none; border-color:var(--blue);}
+  .list{padding:14px 18px 100px; display:flex; flex-direction:column; gap:10px;}
+  .empty{
+    margin-top:60px; text-align:center; color:var(--ink-soft); padding:0 20px;
+  }
+  .empty .num{font-size:40px; color:var(--line); display:block; margin-bottom:8px;}
+
+  .fiche{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-left:6px solid var(--blue);
+    padding:14px 14px 12px;
+    display:flex; justify-content:space-between; align-items:center;
+    cursor:pointer;
+  }
+  .fiche:active{background:#F4F2EC;}
+  .fiche-left{min-width:0;}
+  .fiche-num{font-size:13px; color:var(--ink-soft); font-weight:600;}
+  .fiche-ste{font-size:17px; font-weight:700; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+  .fiche-meta{font-size:12.5px; color:var(--ink-soft); margin-top:3px;}
+  .fiche-right{text-align:right; padding-left:10px; flex-shrink:0;}
+  .fiche-total{font-size:17px; font-weight:800;}
+  .fiche-total-label{font-size:10.5px; color:var(--ink-soft); letter-spacing:0.04em;}
+
+  .fab{
+    position:fixed; bottom:22px; left:50%;
+    transform:translateX(calc(-50% + 0px));
+    max-width:520px; width:calc(100% - 36px);
+    display:flex; justify-content:flex-end;
+    pointer-events:none;
+  }
+  .fab button{
+    pointer-events:auto;
+    background:var(--orange); color:#fff; border:none;
+    width:58px; height:58px; border-radius:50%;
+    font-size:28px; font-weight:400; line-height:1;
+    box-shadow:0 3px 10px rgba(0,0,0,0.25);
+    cursor:pointer;
+  }
+  .fab button:active{background:#A9531F;}
+
+  /* ---- Form view ---- */
+  .form-wrap{padding:16px 18px 110px; flex:1;}
+  .field{margin-bottom:14px;}
+  .field label{
+    display:block; font-size:12px; font-weight:700; color:var(--ink-soft);
+    letter-spacing:0.03em; margin-bottom:5px;
+  }
+  .field input, .field select, .field textarea{
+    width:100%; padding:11px 12px; border:2px solid var(--line);
+    border-radius:2px; font-size:15px; background:var(--card); color:var(--ink);
+    font-family:inherit;
+  }
+  .field textarea{resize:vertical; min-height:80px; line-height:1.5;}
+  .field input:focus, .field select:focus, .field textarea:focus{outline:none; border-color:var(--blue);}
+  .field input.upper{text-transform:uppercase;}
+  .field-hint{font-size:11.5px; color:var(--ink-soft); margin-top:5px;}
+  .row2{display:flex; gap:10px;}
+  .row2 .field{flex:1;}
+
+  .section-title{
+    font-size:13px; font-weight:800; text-transform:uppercase; letter-spacing:0.04em;
+    color:var(--blue); margin:22px 0 10px; padding-bottom:6px; border-bottom:2px solid var(--ink);
+  }
+
+  .ligne{
+    background:var(--card); border:1px solid var(--line); padding:12px; margin-bottom:10px; position:relative;
+  }
+  .ligne-del{
+    position:absolute; top:8px; right:8px; background:none; border:none;
+    color:var(--red); font-size:19px; cursor:pointer; padding:4px 6px; line-height:1;
+  }
+  .ligne .field{margin-bottom:10px;}
+  .ligne .field:last-child{margin-bottom:0;}
+  .ligne-sous-total{
+    text-align:right; font-size:13px; color:var(--ink-soft); margin-top:2px;
+  }
+
+  .add-ligne-btn{
+    width:100%; padding:12px; background:none; border:2px dashed var(--line);
+    color:var(--blue); font-weight:700; font-size:14px; cursor:pointer; border-radius:2px;
+  }
+  .add-ligne-btn:active{border-color:var(--blue);}
+
+  .totals-box{
+    margin-top:18px; border:2px solid var(--ink); background:var(--card);
+  }
+  .totals-row{
+    display:flex; justify-content:space-between; padding:9px 14px;
+    border-bottom:1px solid var(--line); font-size:14px;
+  }
+  .totals-row:last-child{border-bottom:none; background:var(--ink); color:#fff; padding:12px 14px;}
+  .totals-row:last-child .num{font-size:19px;}
+  .totals-row .num{font-weight:700;}
+
+  .paymode-options{display:flex; gap:8px; flex-wrap:wrap;}
+  .paymode-chip{
+    flex:1; min-width:104px; padding:11px 6px; text-align:center;
+    border:2px solid var(--line); border-radius:2px; font-size:12px; font-weight:700;
+    cursor:pointer; background:var(--card); color:var(--ink);
+  }
+  .paymode-chip.active{border-color:var(--blue); background:var(--blue); color:#fff;}
+
+  .logo-row{display:flex; align-items:center; gap:12px; margin-bottom:6px;}
+  .logo-preview{
+    width:64px; height:64px; border-radius:50%; object-fit:cover; border:2px solid var(--line);
+    background:var(--card); flex-shrink:0;
+  }
+  .logo-placeholder{
+    width:64px; height:64px; border-radius:50%; border:2px dashed var(--line);
+    display:flex; align-items:center; justify-content:center; color:var(--ink-soft); font-size:11px;
+    text-align:center; flex-shrink:0;
+  }
+  .logo-btns{display:flex; flex-direction:column; gap:6px;}
+  .link-btn{
+    background:none; border:none; color:var(--blue); font-size:13px; font-weight:700;
+    cursor:pointer; text-align:left; padding:0;
+  }
+  .link-btn.danger{color:var(--red);}
+
+  .save-bar{
+    position:fixed; bottom:0; left:0; right:0;
+    background:var(--bg); border-top:2px solid var(--ink);
+    padding:12px 18px calc(12px + env(safe-area-inset-bottom));
+    display:flex; justify-content:center;
+  }
+  .save-bar-inner{max-width:520px; width:100%; display:flex; gap:10px;}
+  .btn-primary{
+    flex:1; background:var(--orange); color:#fff; border:none; padding:14px;
+    font-size:15px; font-weight:700; border-radius:2px; cursor:pointer;
+  }
+  .btn-primary:active{background:#A9531F;}
+  .btn-danger{
+    background:none; color:var(--red); border:2px solid var(--red); padding:14px 16px;
+    font-size:14px; font-weight:700; border-radius:2px; cursor:pointer;
+  }
+
+  /* ---- Preview (facture look — reproduit le modèle papier) ---- */
+  .preview-wrap{padding:16px 18px 110px;}
+  .sheet{
+    background:#fff; border:1px solid var(--line); padding:24px 20px; color:#111;
+    font-family:Arial,Helvetica,sans-serif;
+  }
+  .sheet-header{
+    display:flex; align-items:center; justify-content:center; gap:14px;
+    border-bottom:3px solid #1a3a63; padding-bottom:14px; margin-bottom:16px;
+  }
+  .sheet-header.empty{display:none;}
+  .sheet-logo{width:62px; height:62px; border-radius:50%; object-fit:cover; flex-shrink:0;}
+  .sheet-header-text{text-align:center;}
+  .sheet-header-text .h-nom{
+    font-weight:800; font-size:20px; letter-spacing:0.01em; color:#1a3a63;
+  }
+  .sheet-header-text .h-activite{font-size:11.5px; color:#555; margin-top:3px; font-style:italic;}
+
+  .sheet-top{text-align:center; margin-bottom:16px;}
+  .sheet-title{
+    font-weight:800; font-size:19px; letter-spacing:0.02em;
+    border-bottom:3px solid #111; display:inline-block; padding-bottom:4px;
+  }
+
+  .sheet-clientwrap{text-align:right; margin-bottom:8px;}
+  .sheet-client{
+    display:inline-block; text-align:left; border:1.5px solid #111; padding:9px 14px;
+    font-size:13px; line-height:1.6; min-width:230px;
+  }
+  .sheet-date{text-align:right; font-size:13px; font-weight:700; margin:10px 0 12px;}
+  .sheet-objet{font-size:13.5px; font-weight:700; margin-bottom:12px;}
+
+  table.sheet-table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:4px;}
+  .sheet-table th{
+    background:#EDEAE0; border:1px solid #111; padding:7px 6px; font-size:11.5px;
+  }
+  .sheet-table td{border:1px solid #111; padding:7px 6px; text-align:center;}
+  .sheet-table td.desig{text-align:left; font-weight:600;}
+  .sheet-total-ttc td{font-weight:800; background:#F5F3EC;}
+
+  .sheet-summary{width:52%; margin-left:auto; font-size:13px; margin:14px 0 16px;}
+  .sheet-summary div{display:flex; justify-content:space-between; border:1px solid #111; padding:6px 10px; margin-top:-1px;}
+  .sheet-summary div:last-child{font-weight:800; background:#111; color:#fff;}
+
+  .sheet-lettres{font-size:12.5px; line-height:1.7; margin-bottom:6px;}
+  .sheet-lettres b{display:block; font-size:13px;}
+  .sheet-payment{font-size:13px; font-weight:700; margin-bottom:22px;}
+
+  .sheet-signature{text-align:center; margin-top:18px;}
+  .sheet-signature .sig-label{font-weight:700; font-size:13px; margin-bottom:24px;}
+  .sheet-signature .sig-nom{color:#1a3a63; font-weight:800; font-size:13px;}
+  .sheet-signature .sig-detail{color:#1a3a63; font-size:10.5px; margin-top:2px; white-space:pre-line; line-height:1.5;}
+
+  .sheet-footer{
+    margin-top:26px; border-top:1.5px solid #111; border-bottom:1.5px solid #111;
+    padding:8px 4px; font-size:10px; color:#222; text-align:center; line-height:1.6; white-space:pre-line;
+  }
+  .sheet-footer.empty{display:none;}
+
+  .preview-actions{display:flex; gap:10px; margin-top:16px; flex-wrap:wrap;}
+  .btn-secondary{
+    flex:1; min-width:120px; background:none; border:2px solid var(--blue); color:var(--blue);
+    padding:12px; font-weight:700; font-size:14px; border-radius:2px; cursor:pointer;
+  }
+  .btn-pdf{
+    flex:1; min-width:120px; background:var(--green); border:2px solid var(--green); color:#fff;
+    padding:12px; font-weight:700; font-size:14px; border-radius:2px; cursor:pointer;
+  }
+  .btn-pdf:disabled{opacity:0.6;}
+
+  .loading{padding:60px 20px; text-align:center; color:var(--ink-soft);}
+</style>
+</head>
+<body>
+<div id="app"></div>
+
+<script>
+(function(){
+  const TVA_RATE = 0.20;
+  const PAYMODES = {
+    cheque: { label:'Chèque', numLabel:'N° du chèque' },
+    lettre_change: { label:'Lettre de change', numLabel:'N° de la lettre de change' },
+    virement: { label:'Virement bancaire', numLabel:null }
+  };
+
+  let state = {
+    view: 'list',        // list | form | preview | settings
+    invoices: [],
+    company: { entete_nom:'', entete_activite:'', entete_logo:'', pied_texte:'' },
+    loaded: false,
+    editingId: null,
+    search: '',
+    draft: null,
+    companyDraft: null,
+    installPromptEvent: null,
+    installDismissed: false
+  };
+
+  function uid(){ return 'f' + Date.now() + Math.random().toString(36).slice(2,7); }
+
+  function emptyDraft(){
+    return {
+      id: uid(),
+      numero: '',
+      societe: '',
+      ice: '',
+      ville: 'CASABLANCA',
+      date: new Date().toISOString().slice(0,10),
+      objet: 'Vente matériaux de construction.',
+      lignes: [ { id: uid(), designation:'', quantite:'', prix:'' } ],
+      modePaiement: 'virement',
+      modePaiementNumero: ''
+    };
+  }
+
+  function fmt(n){
+    if(isNaN(n)) n = 0;
+    return n.toLocaleString('fr-FR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  }
+
+  function calcTotals(inv){
+    const ttc = inv.lignes.reduce((s,l)=> s + (parseFloat(l.quantite)||0) * (parseFloat(l.prix)||0), 0);
+    const ht = ttc / (1+TVA_RATE);
+    const tva = ttc - ht;
+    return {ttc, ht, tva};
+  }
+
+  function dateFR(iso){
+    if(!iso) return '';
+    const [y,m,d] = iso.split('-');
+    return `${d}/${m}/${y}`;
+  }
+
+  function paymentLine(inv){
+    const mode = PAYMODES[inv.modePaiement] || PAYMODES.virement;
+    if(mode.numLabel && inv.modePaiementNumero){
+      return `Payer par ${mode.label} N°${inv.modePaiementNumero}`;
+    }
+    return `Payer par ${mode.label}`;
+  }
+
+  // ---------- Nombre en lettres (français) ----------
+  const UNITES = ['', 'UN', 'DEUX', 'TROIS', 'QUATRE', 'CINQ', 'SIX', 'SEPT', 'HUIT', 'NEUF', 'DIX',
+    'ONZE', 'DOUZE', 'TREIZE', 'QUATORZE', 'QUINZE', 'SEIZE', 'DIX-SEPT', 'DIX-HUIT', 'DIX-NEUF'];
+  const DIZAINES = ['', '', 'VINGT', 'TRENTE', 'QUARANTE', 'CINQUANTE', 'SOIXANTE'];
+
+  function convertDizaine(n){
+    if(n < 20) return UNITES[n];
+    const d = Math.floor(n/10), u = n % 10;
+    if(d === 7) return (u===1) ? 'SOIXANTE ET ONZE' : 'SOIXANTE-' + UNITES[10+u];
+    if(d === 9) return 'QUATRE-VINGT-' + UNITES[10+u];
+    if(d === 8) return (u===0) ? 'QUATRE-VINGTS' : 'QUATRE-VINGT-' + UNITES[u];
+    if(u === 0) return DIZAINES[d];
+    if(u === 1) return DIZAINES[d] + ' ET UN';
+    return DIZAINES[d] + '-' + UNITES[u];
+  }
+  function convertCentaine(n){
+    const c = Math.floor(n/100), r = n % 100;
+    let res = '';
+    if(c > 0){
+      res += (c > 1 ? UNITES[c] + ' CENT' : 'CENT');
+      if(c > 1 && r === 0) res += 'S';
+    }
+    if(r > 0){ if(res) res += ' '; res += convertDizaine(r); }
+    return res;
+  }
+  function nombreEnLettresFR(num){
+    num = Math.floor(Math.abs(num||0));
+    if(num === 0) return 'ZÉRO';
+    const millions = Math.floor(num / 1000000);
+    const milliers = Math.floor((num % 1000000) / 1000);
+    const reste = num % 1000;
+    let parts = [];
+    if(millions > 0) parts.push(millions > 1 ? convertCentaine(millions) + ' MILLIONS' : 'UN MILLION');
+    if(milliers > 0) parts.push(milliers === 1 ? 'MILLE' : convertCentaine(milliers) + ' MILLE');
+    if(reste > 0 || parts.length === 0) parts.push(convertCentaine(reste));
+    return parts.join(' ').trim();
+  }
+
+  async function loadAll(){
+    try{
+      const res = await window.storage.get('invoices', false);
+      state.invoices = res && res.value ? JSON.parse(res.value) : [];
+    }catch(e){ state.invoices = []; }
+    try{
+      const res2 = await window.storage.get('company', false);
+      if(res2 && res2.value) state.company = Object.assign({entete_nom:'',entete_activite:'',entete_logo:'',pied_texte:''}, JSON.parse(res2.value));
+    }catch(e){ /* pas encore de réglages enregistrés */ }
+    state.loaded = true;
+    render();
+  }
+
+  async function persistInvoices(){
+    try{ await window.storage.set('invoices', JSON.stringify(state.invoices), false); }
+    catch(e){ console.error('Erreur de sauvegarde', e); }
+  }
+  async function persistCompany(){
+    try{ await window.storage.set('company', JSON.stringify(state.company), false); }
+    catch(e){ console.error('Erreur de sauvegarde', e); }
+  }
+
+  // ---------- Actions ----------
+  function goList(){ state.view='list'; state.draft=null; state.editingId=null; render(); }
+  function goNew(){ state.view='form'; state.draft=emptyDraft(); state.editingId=null; render(); }
+  function goEdit(id){
+    const inv = state.invoices.find(i=>i.id===id);
+    state.draft = JSON.parse(JSON.stringify(inv));
+    if(!state.draft.modePaiement) state.draft.modePaiement = 'virement';
+    if(state.draft.modePaiementNumero===undefined) state.draft.modePaiementNumero = '';
+    if(state.draft.objet===undefined) state.draft.objet = 'Vente matériaux de construction.';
+    state.editingId = id;
+    state.view='form';
+    render();
+  }
+  function goPreview(id){ state.editingId = id; state.view='preview'; render(); }
+  function goSettings(){
+    state.companyDraft = JSON.parse(JSON.stringify(state.company));
+    state.view='settings';
+    render();
+  }
+
+  function addLigne(){ state.draft.lignes.push({id:uid(), designation:'', quantite:'', prix:''}); render(); }
+  function removeLigne(lid){
+    if(state.draft.lignes.length<=1) return;
+    state.draft.lignes = state.draft.lignes.filter(l=>l.id!==lid);
+    render();
+  }
+  function setPaymode(mode){ state.draft.modePaiement = mode; render(); }
+
+  function saveDraft(){
+    const d = state.draft;
+    if(!d.numero.trim() || !d.societe.trim()){
+      alert('Merci de renseigner au moins le N° de facture et le nom de la société.');
+      return;
+    }
+    const existingIndex = state.invoices.findIndex(i=>i.id===d.id);
+    if(existingIndex>=0){ state.invoices[existingIndex] = d; }
+    else{ state.invoices.unshift(d); }
+    persistInvoices();
+    state.view='list';
+    render();
+  }
+
+  function saveCompany(){
+    state.company = state.companyDraft;
+    persistCompany();
+    goList();
+  }
+
+  function deleteInvoice(id){
+    if(!confirm('Supprimer définitivement cette facture ?')) return;
+    state.invoices = state.invoices.filter(i=>i.id!==id);
+    persistInvoices();
+    goList();
+  }
+
+  function exportPDF(inv){
+    const el = document.getElementById('pdfSheet');
+    const btn = document.getElementById('pdfBtn');
+    if(!el || !window.html2pdf) return;
+    if(btn){ btn.disabled = true; btn.textContent = 'Génération…'; }
+    const opt = {
+      margin: 6,
+      filename: `Facture_${(inv.numero||'sans-numero').toString().replace(/[^a-zA-Z0-9-_]/g,'')}.pdf`,
+      image: { type:'jpeg', quality:0.98 },
+      html2canvas: { scale:2, useCORS:true },
+      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
+    };
+    window.html2pdf().set(opt).from(el).save().then(()=>{
+      if(btn){ btn.disabled=false; btn.textContent='Exporter en PDF'; }
+    }).catch(()=>{
+      if(btn){ btn.disabled=false; btn.textContent='Exporter en PDF'; }
+      alert("Le PDF n'a pas pu être généré. Réessayez.");
+    });
+  }
+
+  // ---------- Render ----------
+  function render(){
+    const app = document.getElementById('app');
+    if(!state.loaded){ app.innerHTML = `<div class="loading">Chargement des factures…</div>`; return; }
+    if(state.view==='list') return renderList(app);
+    if(state.view==='form') return renderForm(app);
+    if(state.view==='preview') return renderPreview(app);
+    if(state.view==='settings') return renderSettings(app);
+  }
+
+  function renderList(app){
+    const q = state.search.trim().toLowerCase();
+    const filtered = state.invoices.filter(i =>
+      !q || i.numero.toLowerCase().includes(q) || i.societe.toLowerCase().includes(q)
+    );
+
+    app.innerHTML = `
+      <div class="appbar">
+        <div class="appbar-row">
+          <div class="brand">Factures<small>Registre des factures de vente</small></div>
+          <button class="icon-btn" id="settingsBtn" aria-label="Réglages entreprise" title="En-tête / pied de page">⚙</button>
+        </div>
+      </div>
+      <div class="install-banner ${state.installPromptEvent && !state.installDismissed ? 'show' : ''}" id="installBanner">
+        <span>Installez Factures comme une vraie app sur votre téléphone.</span>
+        <button id="installBtn">Installer</button>
+        <button class="close-x" id="installClose" aria-label="Fermer">×</button>
+      </div>
+      <div class="search-wrap">
+        <input class="search" placeholder="Rechercher un N° ou une société…" value="${escapeAttr(state.search)}" id="searchInput">
+      </div>
+      <div class="list" id="listZone">
+        ${filtered.length===0 ? emptyHTML(q) : filtered.map(rowHTML).join('')}
+      </div>
+      <div class="fab"><button id="fabBtn" aria-label="Nouvelle facture">+</button></div>
+    `;
+
+    document.getElementById('searchInput').oninput = (e)=>{ state.search = e.target.value; renderList(app); };
+    document.getElementById('fabBtn').onclick = goNew;
+    document.getElementById('settingsBtn').onclick = goSettings;
+    if(document.getElementById('installBtn')){
+      document.getElementById('installBtn').onclick = async ()=>{
+        if(!state.installPromptEvent) return;
+        state.installPromptEvent.prompt();
+        await state.installPromptEvent.userChoice;
+        state.installPromptEvent = null;
+        renderList(app);
+      };
+      document.getElementById('installClose').onclick = ()=>{
+        state.installDismissed = true;
+        renderList(app);
+      };
+    }
+    filtered.forEach(inv=>{
+      const el = document.getElementById('row-'+inv.id);
+      if(el) el.onclick = ()=> goPreview(inv.id);
+    });
+  }
+
+  function emptyHTML(q){
+    if(q) return `<div class="empty"><span class="num">?</span>Aucune facture ne correspond à « ${escapeHTML(q)} ».</div>`;
+    return `<div class="empty"><span class="num">0</span>Aucune facture pour l'instant.<br>Touchez le bouton + pour créer la première.</div>`;
+  }
+
+  function rowHTML(inv){
+    const {ttc} = calcTotals(inv);
+    return `
+      <div class="fiche" id="row-${inv.id}">
+        <div class="fiche-left">
+          <div class="fiche-num">FACTURE N° ${escapeHTML(inv.numero||'—')}</div>
+          <div class="fiche-ste">${escapeHTML(inv.societe||'Société non renseignée')}</div>
+          <div class="fiche-meta">${escapeHTML(inv.ville||'')} · ${dateFR(inv.date)}</div>
+        </div>
+        <div class="fiche-right">
+          <div class="fiche-total num">${fmt(ttc)}</div>
+          <div class="fiche-total-label">DH TTC</div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderForm(app){
+    const d = state.draft;
+    app.innerHTML = `
+      <div class="appbar">
+        <button class="back-btn" id="backBtn">‹ Retour</button>
+        <div class="brand" style="margin-top:4px;">${state.editingId? 'Modifier la facture' : 'Nouvelle facture'}</div>
+      </div>
+      <div class="form-wrap">
+        <div class="row2">
+          <div class="field">
+            <label>N° Facture</label>
+            <input id="f-numero" value="${escapeAttr(d.numero)}" placeholder="ex. 44">
+          </div>
+          <div class="field">
+            <label>Date</label>
+            <input id="f-date" type="date" value="${d.date}">
+          </div>
+        </div>
+        <div class="field">
+          <label>Société (STE)</label>
+          <input id="f-societe" class="upper" value="${escapeAttr(d.societe)}" placeholder="NOM DE LA SOCIÉTÉ">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>ICE</label>
+            <input id="f-ice" value="${escapeAttr(d.ice)}" placeholder="001536591000010">
+          </div>
+          <div class="field">
+            <label>Ville</label>
+            <input id="f-ville" class="upper" value="${escapeAttr(d.ville)}" placeholder="CASABLANCA">
+          </div>
+        </div>
+        <div class="field">
+          <label>Objet</label>
+          <input id="f-objet" value="${escapeAttr(d.objet)}" placeholder="ex. Vente matériaux de construction.">
+        </div>
+
+        <div class="section-title">Lignes de facturation</div>
+        <div id="lignesZone">
+          ${d.lignes.map(ligneHTML).join('')}
+        </div>
+        <button class="add-ligne-btn" id="addLigneBtn">+ Ajouter une ligne</button>
+
+        ${totalsBoxHTML(calcTotals(d))}
+
+        <div class="section-title">Mode de paiement</div>
+        <div class="paymode-options">
+          ${Object.keys(PAYMODES).map(k=>`
+            <div class="paymode-chip ${d.modePaiement===k?'active':''}" data-mode="${k}">${PAYMODES[k].label}</div>
+          `).join('')}
+        </div>
+        ${PAYMODES[d.modePaiement].numLabel ? `
+          <div class="field" style="margin-top:12px;">
+            <label>${PAYMODES[d.modePaiement].numLabel}</label>
+            <input id="f-paynum" value="${escapeAttr(d.modePaiementNumero)}" placeholder="ex. 1774407">
+          </div>
+        ` : ''}
+      </div>
+      <div class="save-bar">
+        <div class="save-bar-inner">
+          ${state.editingId ? `<button class="btn-danger" id="delBtn">Suppr.</button>` : ''}
+          <button class="btn-primary" id="saveBtn">Enregistrer la facture</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById('backBtn').onclick = goList;
+    document.getElementById('f-numero').oninput = e=> d.numero = e.target.value;
+    document.getElementById('f-date').oninput = e=> d.date = e.target.value;
+    document.getElementById('f-societe').oninput = e=> d.societe = e.target.value.toUpperCase();
+    document.getElementById('f-ice').oninput = e=> d.ice = e.target.value;
+    document.getElementById('f-ville').oninput = e=> d.ville = e.target.value.toUpperCase();
+    document.getElementById('f-objet').oninput = e=> d.objet = e.target.value;
+    document.getElementById('addLigneBtn').onclick = addLigne;
+    document.getElementById('saveBtn').onclick = saveDraft;
+    if(document.getElementById('delBtn')) document.getElementById('delBtn').onclick = ()=> deleteInvoice(state.editingId);
+    if(document.getElementById('f-paynum')) document.getElementById('f-paynum').oninput = e=> d.modePaiementNumero = e.target.value;
+    document.querySelectorAll('.paymode-chip').forEach(chip=>{
+      chip.onclick = ()=> setPaymode(chip.getAttribute('data-mode'));
+    });
+
+    d.lignes.forEach(l=>{
+      const desg = document.getElementById('l-desig-'+l.id);
+      const qte = document.getElementById('l-qte-'+l.id);
+      const prix = document.getElementById('l-prix-'+l.id);
+      const del = document.getElementById('l-del-'+l.id);
+      if(desg) desg.oninput = e=>{ l.designation = e.target.value; };
+      if(qte) qte.oninput = e=>{ l.quantite = e.target.value; refreshLigneSubtotal(l); refreshTotals(); };
+      if(prix) prix.oninput = e=>{ l.prix = e.target.value; refreshLigneSubtotal(l); refreshTotals(); };
+      if(del) del.onclick = ()=> removeLigne(l.id);
+    });
+  }
+
+  function refreshLigneSubtotal(l){
+    const el = document.getElementById('l-sub-'+l.id);
+    if(el){
+      const sub = (parseFloat(l.quantite)||0) * (parseFloat(l.prix)||0);
+      el.textContent = fmt(sub) + ' DH';
+    }
+  }
+  function refreshTotals(){
+    const box = document.getElementById('totalsBox');
+    if(box) box.outerHTML = totalsBoxHTML(calcTotals(state.draft));
+  }
+
+  function ligneHTML(l){
+    const sub = (parseFloat(l.quantite)||0) * (parseFloat(l.prix)||0);
+    return `
+      <div class="ligne">
+        ${state.draft.lignes.length>1 ? `<button class="ligne-del" id="l-del-${l.id}" aria-label="Supprimer">×</button>` : ''}
+        <div class="field">
+          <label>Désignation</label>
+          <input id="l-desig-${l.id}" value="${escapeAttr(l.designation)}" placeholder="ex. KG FER 12">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label>Quantité</label>
+            <input id="l-qte-${l.id}" type="number" inputmode="decimal" value="${escapeAttr(l.quantite)}" placeholder="0">
+          </div>
+          <div class="field">
+            <label>Prix U/TTC</label>
+            <input id="l-prix-${l.id}" type="number" inputmode="decimal" value="${escapeAttr(l.prix)}" placeholder="0.00">
+          </div>
+        </div>
+        <div class="ligne-sous-total num" id="l-sub-${l.id}">${fmt(sub)} DH</div>
+      </div>
+    `;
+  }
+
+  function totalsBoxHTML(t){
+    return `
+      <div class="totals-box" id="totalsBox">
+        <div class="totals-row"><span>Total HT</span><span class="num">${fmt(t.ht)} DH</span></div>
+        <div class="totals-row"><span>TVA 20%</span><span class="num">${fmt(t.tva)} DH</span></div>
+        <div class="totals-row"><span>TOTAL TTC</span><span class="num">${fmt(t.ttc)} DH</span></div>
+      </div>
+    `;
+  }
+
+  function renderSettings(app){
+    const c = state.companyDraft;
+    app.innerHTML = `
+      <div class="appbar">
+        <button class="back-btn" id="backBtn">‹ Retour</button>
+        <div class="brand" style="margin-top:4px;">En-tête &amp; pied de page</div>
+      </div>
+      <div class="form-wrap">
+        <div class="section-title">Logo</div>
+        <div class="logo-row">
+          ${c.entete_logo ? `<img class="logo-preview" src="${c.entete_logo}">` : `<div class="logo-placeholder">Aucun<br>logo</div>`}
+          <div class="logo-btns">
+            <label class="link-btn" style="cursor:pointer;">Choisir une image
+              <input type="file" accept="image/*" id="c-logo-input" style="display:none;">
+            </label>
+            ${c.entete_logo ? `<button class="link-btn danger" id="c-logo-remove">Supprimer le logo</button>` : ''}
+          </div>
+        </div>
+
+        <div class="section-title">En-tête (haut de la facture)</div>
+        <div class="field">
+          <label>Nom de l'entreprise</label>
+          <input id="c-nom" class="upper" value="${escapeAttr(c.entete_nom)}" placeholder="REGRAGA CONSTRUCTION S.A.R.L">
+        </div>
+        <div class="field">
+          <label>Activité / sous-titre</label>
+          <input id="c-activite" value="${escapeAttr(c.entete_activite)}" placeholder="Matériaux de construction">
+        </div>
+
+        <div class="section-title">Pied de page (bas de la facture)</div>
+        <div class="field">
+          <label>Coordonnées et mentions légales</label>
+          <textarea id="c-pied" placeholder="Adresse, R.C, ICE, TP, IF, GSM…">${escapeHTML(c.pied_texte)}</textarea>
+          <div class="field-hint">Ce texte apparaît en bas de chaque facture et du PDF, ainsi qu'à côté de la signature.</div>
+        </div>
+      </div>
+      <div class="save-bar">
+        <div class="save-bar-inner">
+          <button class="btn-primary" id="saveCompanyBtn">Enregistrer les réglages</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('backBtn').onclick = goList;
+    document.getElementById('c-nom').oninput = e=> c.entete_nom = e.target.value.toUpperCase();
+    document.getElementById('c-activite').oninput = e=> c.entete_activite = e.target.value;
+    document.getElementById('c-pied').oninput = e=> c.pied_texte = e.target.value;
+    document.getElementById('saveCompanyBtn').onclick = saveCompany;
+    document.getElementById('c-logo-input').onchange = (e)=>{
+      const file = e.target.files[0];
+      if(!file) return;
+      const reader = new FileReader();
+      reader.onload = ()=>{ c.entete_logo = reader.result; renderSettings(app); };
+      reader.readAsDataURL(file);
+    };
+    if(document.getElementById('c-logo-remove')){
+      document.getElementById('c-logo-remove').onclick = ()=>{ c.entete_logo=''; renderSettings(app); };
+    }
+  }
+
+  function renderPreview(app){
+    const inv = state.invoices.find(i=>i.id===state.editingId);
+    if(!inv){ goList(); return; }
+    const t = calcTotals(inv);
+    const co = state.company;
+    const hasHeader = (co.entete_nom||'').trim() || (co.entete_activite||'').trim() || co.entete_logo;
+    const hasFooter = (co.pied_texte||'').trim();
+    const montantLettres = nombreEnLettresFR(Math.round(t.ttc));
+
+    app.innerHTML = `
+      <div class="appbar">
+        <button class="back-btn" id="backBtn">‹ Retour</button>
+        <div class="brand" style="margin-top:4px;">Facture N° ${escapeHTML(inv.numero)}</div>
+      </div>
+      <div class="preview-wrap">
+        <div class="sheet" id="pdfSheet">
+          <div class="sheet-header ${hasHeader?'':'empty'}">
+            ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
+            <div class="sheet-header-text">
+              ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
+              ${co.entete_activite ? `<div class="h-activite">${escapeHTML(co.entete_activite)}</div>` : ''}
+            </div>
+          </div>
+          <div class="sheet-top"><span class="sheet-title">FACTURE N${escapeHTML(inv.numero)}</span></div>
+          <div class="sheet-clientwrap">
+            <div class="sheet-client">
+              <b>Ste :</b> ${escapeHTML(inv.societe)}<br>
+              <b>ICE :</b> ${escapeHTML(inv.ice||'—')}
+            </div>
+          </div>
+          <div class="sheet-date">${escapeHTML(inv.ville)} : ${dateFR(inv.date)}</div>
+          ${inv.objet ? `<div class="sheet-objet">Objet : ${escapeHTML(inv.objet)}</div>` : ''}
+          <table class="sheet-table">
+            <thead><tr><th>Désignation</th><th>Quantité</th><th>Prix U/TTC</th><th>Total TTC</th></tr></thead>
+            <tbody>
+              ${inv.lignes.map(l=>{
+                const s = (parseFloat(l.quantite)||0)*(parseFloat(l.prix)||0);
+                return `<tr>
+                  <td class="desig">${escapeHTML(l.designation||'—')}</td>
+                  <td>${escapeHTML(String(l.quantite||0))}</td>
+                  <td>${fmt(parseFloat(l.prix)||0)}</td>
+                  <td>${fmt(s)}</td>
+                </tr>`;
+              }).join('')}
+              <tr class="sheet-total-ttc"><td colspan="3">TOTAL TTC</td><td>${fmt(t.ttc)}</td></tr>
+            </tbody>
+          </table>
+          <div class="sheet-summary">
+            <div><span>TOTAL HT</span><span>${fmt(t.ht)}</span></div>
+            <div><span>TVA 20%</span><span>${fmt(t.tva)}</span></div>
+            <div><span>TOTAL TTC</span><span>${fmt(t.ttc)}</span></div>
+          </div>
+          <div class="sheet-lettres">
+            La présente facture et reste à la somme du :
+            <b>${escapeHTML(montantLettres)} DH.</b>
+          </div>
+          <div class="sheet-payment">${escapeHTML(paymentLine(inv))}</div>
+
+          <div class="sheet-signature">
+            <div class="sig-label">Signature :</div>
+            ${co.entete_nom ? `<div class="sig-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
+            ${co.pied_texte ? `<div class="sig-detail">${escapeHTML(co.pied_texte)}</div>` : ''}
+          </div>
+
+          <div class="sheet-footer ${hasFooter?'':'empty'}">${escapeHTML(co.pied_texte||'')}</div>
+        </div>
+        <div class="preview-actions">
+          <button class="btn-secondary" id="editBtn">Modifier</button>
+          <button class="btn-secondary" id="delBtn" style="border-color:var(--red); color:var(--red);">Supprimer</button>
+          <button class="btn-pdf" id="pdfBtn">Exporter en PDF</button>
+        </div>
+      </div>
+    `;
+    document.getElementById('backBtn').onclick = goList;
+    document.getElementById('editBtn').onclick = ()=> goEdit(inv.id);
+    document.getElementById('delBtn').onclick = ()=> deleteInvoice(inv.id);
+    document.getElementById('pdfBtn').onclick = ()=> exportPDF(inv);
+  }
+
+  function escapeHTML(s){
+    return String(s??'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function escapeAttr(s){ return escapeHTML(s); }
+
+  loadAll();
+
+  // Enregistrement du service worker pour le mode hors-ligne (app installée)
+  if('serviceWorker' in navigator){
+    window.addEventListener('load', ()=>{
+      navigator.serviceWorker.register('sw.js').catch(()=>{ /* pas grave si indisponible en aperçu */ });
+    });
+  }
+
+  // Capture l'invite d'installation native (Android/Chrome/Edge)
+  window.addEventListener('beforeinstallprompt', (e)=>{
+    e.preventDefault();
+    state.installPromptEvent = e;
+    if(state.view==='list') render();
+  });
+})();
+</script>
+</body>
+</html>
