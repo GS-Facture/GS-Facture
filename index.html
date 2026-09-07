@@ -816,7 +816,7 @@
       const qte = document.getElementById('l-qte-'+l.id);
       const prix = document.getElementById('l-prix-'+l.id);
       const del = document.getElementById('l-del-'+l.id);
-      if(desg) desg.oninput = e=>{ l.designation = e.target.value; };
+      if(desg) desg.oninput = e=>{ l.designation = e.target.value.toUpperCase(); };
       if(qte) qte.oninput = e=>{ l.quantite = e.target.value; refreshLigneSubtotal(l); refreshTotals(); };
       if(prix) prix.oninput = e=>{ l.prix = e.target.value; refreshLigneSubtotal(l); refreshTotals(); };
       if(del) del.onclick = ()=> removeLigne(l.id);
@@ -842,7 +842,7 @@
         ${state.draft.lignes.length>1 ? `<button class="ligne-del" id="l-del-${l.id}" aria-label="Supprimer">×</button>` : ''}
         <div class="field">
           <label>Désignation</label>
-          <input id="l-desig-${l.id}" value="${escapeAttr(l.designation)}" placeholder="ex. KG FER 12">
+          <input id="l-desig-${l.id}" class="upper" value="${escapeAttr(l.designation)}" placeholder="ex. KG FER 12">
         </div>
         <div class="row2">
           <div class="field">
