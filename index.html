@@ -287,11 +287,11 @@
 
   table.sheet-table{width:100%; border-collapse:collapse; font-size:13px; margin-bottom:4px;}
   .sheet-table th{
-    background:#EDEAE0; border:1px solid #111; padding:7px 6px; font-size:11.5px;
+    background:#1a3a63; color:#fff; border:1px solid #111; padding:7px 6px; font-size:11.5px;
   }
   .sheet-table td{border:1px solid #111; padding:7px 6px; text-align:center;}
   .sheet-table td.desig{text-align:left; font-weight:600;}
-  .sheet-total-ttc td{font-weight:800; background:#F5F3EC;}
+  .sheet-total-ttc td{font-weight:800; background:#0d2444; color:#fff;}
 
   .sheet-summary{width:52%; font-size:13px; margin:14px 0 16px auto;}
   .sheet-summary div{display:flex; justify-content:space-between; border:1px solid #111; padding:6px 10px; margin-top:-1px;}
@@ -306,7 +306,7 @@
 
   .sheet-footer{
     margin-top:26px; border-top:1.5px solid #111; border-bottom:1.5px solid #111;
-    padding:8px 4px; font-size:10px; color:#222; text-align:center; line-height:1.6; white-space:pre-line;
+    padding:8px 4px; font-size:10px; color:#1a3a63; text-align:center; line-height:1.6; white-space:pre-line;
   }
   .sheet-footer.empty{display:none;}
 
@@ -982,7 +982,7 @@
               ${inv.lignes.map(l=>{
                 const s = (parseFloat(l.quantite)||0)*(parseFloat(l.prix)||0);
                 return `<tr>
-                  <td class="desig">${escapeHTML(l.designation||'—')}</td>
+                  <td class="desig">${escapeHTML((l.designation||'—').toUpperCase())}</td>
                   <td>${escapeHTML(String(l.quantite||0))}</td>
                   <td>${fmt(parseFloat(l.prix)||0)}</td>
                   <td>${fmt(s)}</td>
