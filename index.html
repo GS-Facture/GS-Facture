@@ -243,20 +243,29 @@
   /* ---- Preview (facture look — reproduit le modèle papier) ---- */
   .preview-wrap{padding:16px 18px 110px;}
   .sheet{
+    position:relative; overflow:hidden;
     background:#fff; border:1px solid var(--line); padding:24px 20px; color:#111;
     font-family:Arial,Helvetica,sans-serif;
   }
+  .sheet-watermark{
+    position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
+    width:62%; max-width:340px; opacity:0.06; z-index:0; pointer-events:none;
+    filter:grayscale(1);
+  }
+  .sheet > *:not(.sheet-watermark){ position:relative; z-index:1; }
   .sheet-header{
-    display:flex; align-items:center; justify-content:center; gap:14px;
-    border-bottom:3px solid #1a3a63; padding-bottom:14px; margin-bottom:16px;
+    display:flex; flex-direction:column;
+    border-bottom:3px solid #1a3a63; padding-bottom:8px; margin-bottom:16px;
   }
   .sheet-header.empty{display:none;}
-  .sheet-logo{width:62px; height:62px; border-radius:50%; object-fit:cover; flex-shrink:0;}
-  .sheet-header-text{text-align:center;}
-  .sheet-header-text .h-nom{
-    font-weight:800; font-size:20px; letter-spacing:0.01em; color:#1a3a63;
+  .sheet-header-top{display:flex; align-items:center; justify-content:center; gap:16px;}
+  .sheet-logo{width:64px; height:64px; object-fit:contain; flex-shrink:0;}
+  .h-nom{
+    font-weight:800; font-size:23px; letter-spacing:0.01em; color:#1a3a63; white-space:nowrap;
   }
-  .sheet-header-text .h-activite{font-size:11.5px; color:#555; margin-top:3px; font-style:italic;}
+  .h-activite{
+    font-size:12px; color:#444; margin-top:6px; font-style:italic; text-align:center;
+  }
 
   .sheet-top{text-align:center; margin-bottom:16px;}
   .sheet-title{
@@ -280,7 +289,7 @@
   .sheet-table td.desig{text-align:left; font-weight:600;}
   .sheet-total-ttc td{font-weight:800; background:#F5F3EC;}
 
-  .sheet-summary{width:52%; margin-left:auto; font-size:13px; margin:14px 0 16px;}
+  .sheet-summary{width:52%; font-size:13px; margin:14px 0 16px auto;}
   .sheet-summary div{display:flex; justify-content:space-between; border:1px solid #111; padding:6px 10px; margin-top:-1px;}
   .sheet-summary div:last-child{font-weight:800; background:#111; color:#fff;}
 
@@ -419,13 +428,35 @@
     return parts.join(' ').trim();
   }
 
+  // ---------- Stockage ----------
+  // window.storage n'existe que dans l'aperçu Claude ; une fois l'app hébergée
+  // et installée sur le téléphone (GitHub Pages), on utilise localStorage,
+  // qui persiste réellement sur l'appareil — y compris après une mise à jour du code.
+  const STORAGE_PREFIX = 'gsf_';
+  async function storageGet(key){
+    if(window.storage){
+      try{ return await window.storage.get(key, false); }catch(e){ return null; }
+    }
+    try{
+      const v = localStorage.getItem(STORAGE_PREFIX + key);
+      return v !== null ? { value: v } : null;
+    }catch(e){ return null; }
+  }
+  async function storageSet(key, value){
+    if(window.storage){
+      try{ return await window.storage.set(key, value, false); }catch(e){ return null; }
+    }
+    try{ localStorage.setItem(STORAGE_PREFIX + key, value); return { value }; }
+    catch(e){ return null; }
+  }
+
   async function loadAll(){
     try{
-      const res = await window.storage.get('invoices', false);
+      const res = await storageGet('invoices');
       state.invoices = res && res.value ? JSON.parse(res.value) : [];
     }catch(e){ state.invoices = []; }
     try{
-      const res2 = await window.storage.get('company', false);
+      const res2 = await storageGet('company');
       if(res2 && res2.value) state.company = Object.assign({entete_nom:'',entete_activite:'',entete_logo:'',pied_texte:''}, JSON.parse(res2.value));
     }catch(e){ /* pas encore de réglages enregistrés */ }
     state.loaded = true;
@@ -433,11 +464,11 @@
   }
 
   async function persistInvoices(){
-    try{ await window.storage.set('invoices', JSON.stringify(state.invoices), false); }
+    try{ await storageSet('invoices', JSON.stringify(state.invoices)); }
     catch(e){ console.error('Erreur de sauvegarde', e); }
   }
   async function persistCompany(){
-    try{ await window.storage.set('company', JSON.stringify(state.company), false); }
+    try{ await storageSet('company', JSON.stringify(state.company)); }
     catch(e){ console.error('Erreur de sauvegarde', e); }
   }
 
@@ -489,6 +520,52 @@
     goList();
   }
 
+  function exportBackup(){
+    const payload = { invoices: state.invoices, company: state.company, exportedAt: new Date().toISOString() };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type:'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `sauvegarde-factures-${new Date().toISOString().slice(0,10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function importBackup(e){
+    const file = e.target.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        const data = JSON.parse(reader.result);
+        if(!Array.isArray(data.invoices)) throw new Error('format invalide');
+        if(!confirm(`Importer ${data.invoices.length} facture(s) ? Cela remplacera les données actuelles sur cet appareil.`)) return;
+        state.invoices = data.invoices;
+        if(data.company) state.company = Object.assign({entete_nom:'',entete_activite:'',entete_logo:'',pied_texte:''}, data.company);
+        persistInvoices();
+        persistCompany();
+        alert('Sauvegarde importée avec succès.');
+        goList();
+      }catch(err){
+        alert("Ce fichier n'est pas une sauvegarde valide.");
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function emailBackup(){
+    exportBackup();
+    const subject = encodeURIComponent('Sauvegarde — Factures');
+    const body = encodeURIComponent(
+      `Bonjour,\n\nCe message accompagne la sauvegarde de mes factures (fichier .json téléchargé juste avant).\n` +
+      `Merci de joindre ce fichier à cet e-mail avant de l'envoyer, puis de le conserver précieusement.\n\n` +
+      `Nombre de factures : ${state.invoices.length}\nDate : ${new Date().toLocaleDateString('fr-FR')}`
+    );
+    window.location.href = `mailto:?subject=${subject}&body=${body}`;
+  }
+
   function deleteInvoice(id){
     if(!confirm('Supprimer définitivement cette facture ?')) return;
     state.invoices = state.invoices.filter(i=>i.id!==id);
@@ -504,12 +581,22 @@
     }
     if(btn){ btn.disabled = true; btn.textContent = 'Génération…'; }
 
+    const CLONE_WIDTH = 780;      // px, largeur de la version "page" hors-écran
+    const PAGE_W_MM = 210, PAGE_H_MM = 297, MARGIN_MM = 10;
+    const USABLE_W_MM = PAGE_W_MM - MARGIN_MM*2;
+    const USABLE_H_MM = PAGE_H_MM - MARGIN_MM*2;
+    // Hauteur (en px) correspondant à une page A4 complète pour cette largeur de clone,
+    // afin que le pied de page puisse être plaqué en bas de la feuille comme sur un vrai papier à en-tête.
+    const ONE_PAGE_HEIGHT_PX = Math.round(CLONE_WIDTH * (USABLE_H_MM / USABLE_W_MM));
+
     // On construit une version hors-écran, à largeur "page A4", pour que le PDF
     // soit propre et complet — indépendamment de la largeur étroite de l'écran mobile.
     const clone = document.createElement('div');
     clone.className = 'sheet';
-    clone.style.cssText = 'position:absolute; left:-99999px; top:0; width:780px; background:#fff; padding:28px 26px;';
+    clone.style.cssText = `position:absolute; left:-99999px; top:0; width:${CLONE_WIDTH}px; min-height:${ONE_PAGE_HEIGHT_PX}px; background:#fff; padding:28px 26px; display:flex; flex-direction:column;`;
     clone.innerHTML = buildSheetHTML(inv);
+    const footerEl = clone.querySelector('.sheet-footer');
+    if(footerEl){ footerEl.style.marginTop = 'auto'; footerEl.style.paddingTop = '10px'; }
     document.body.appendChild(clone);
 
     try{
@@ -813,8 +900,21 @@
         <div class="field">
           <label>Coordonnées et mentions légales</label>
           <textarea id="c-pied" placeholder="Adresse, R.C, ICE, TP, IF, GSM…">${escapeHTML(c.pied_texte)}</textarea>
-          <div class="field-hint">Ce texte apparaît en bas de chaque facture et du PDF, ainsi qu'à côté de la signature.</div>
+          <div class="field-hint">Ce texte apparaît en bas de chaque facture et du PDF.</div>
         </div>
+
+        <div class="section-title">Sauvegarde des données</div>
+        <div class="field-hint" style="margin-bottom:12px;">
+          Vos factures sont enregistrées sur cet appareil et restent intactes même après une mise à jour de l'app.
+          Gardez en plus une copie de sécurité — utile si vous changez de téléphone ou effacez le navigateur.
+        </div>
+        <div class="row2">
+          <button type="button" class="btn-secondary" id="exportDataBtn" style="flex:1;">Télécharger une sauvegarde</button>
+          <label class="btn-secondary" style="flex:1; text-align:center; cursor:pointer;">Importer une sauvegarde
+            <input type="file" accept="application/json" id="importDataInput" style="display:none;">
+          </label>
+        </div>
+        <button type="button" class="link-btn" id="emailBackupBtn" style="margin-top:12px;">Envoyer la sauvegarde par e-mail</button>
       </div>
       <div class="save-bar">
         <div class="save-bar-inner">
@@ -837,6 +937,9 @@
     if(document.getElementById('c-logo-remove')){
       document.getElementById('c-logo-remove').onclick = ()=>{ c.entete_logo=''; renderSettings(app); };
     }
+    document.getElementById('exportDataBtn').onclick = exportBackup;
+    document.getElementById('importDataInput').onchange = importBackup;
+    document.getElementById('emailBackupBtn').onclick = emailBackup;
   }
 
   // Contenu de la facture, réutilisé pour l'aperçu à l'écran ET pour l'export PDF
@@ -848,12 +951,13 @@
     const hasFooter = (co.pied_texte||'').trim();
     const montantLettres = nombreEnLettresFR(Math.round(t.ttc));
     return `
+          ${co.entete_logo ? `<img class="sheet-watermark" src="${co.entete_logo}">` : ''}
           <div class="sheet-header ${hasHeader?'':'empty'}">
-            ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
-            <div class="sheet-header-text">
+            <div class="sheet-header-top">
+              ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
               ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
-              ${co.entete_activite ? `<div class="h-activite">${escapeHTML(co.entete_activite)}</div>` : ''}
             </div>
+            ${co.entete_activite ? `<div class="h-activite">${escapeHTML(co.entete_activite)}</div>` : ''}
           </div>
           <div class="sheet-top"><span class="sheet-title">FACTURE N${escapeHTML(inv.numero)}</span></div>
           <div class="sheet-clientwrap">
@@ -893,7 +997,6 @@
           <div class="sheet-signature">
             <div class="sig-label">Signature :</div>
             ${co.entete_nom ? `<div class="sig-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
-            ${co.pied_texte ? `<div class="sig-detail">${escapeHTML(co.pied_texte)}</div>` : ''}
           </div>
 
           <div class="sheet-footer ${hasFooter?'':'empty'}">${escapeHTML(co.pied_texte||'')}</div>
