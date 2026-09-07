@@ -254,17 +254,20 @@
   }
   .sheet > *:not(.sheet-watermark){ position:relative; z-index:1; }
   .sheet-header{
-    display:flex; flex-direction:column;
-    border-bottom:3px solid #1a3a63; padding-bottom:8px; margin-bottom:16px;
+    position:relative;
+    padding:2px 0 14px; margin-bottom:16px;
   }
   .sheet-header.empty{display:none;}
-  .sheet-header-top{display:flex; align-items:center; justify-content:center; gap:16px;}
-  .sheet-logo{width:64px; height:64px; object-fit:contain; flex-shrink:0;}
-  .h-nom{
-    font-weight:800; font-size:23px; letter-spacing:0.01em; color:#1a3a63; white-space:nowrap;
+  .sheet-logo{
+    position:absolute; top:0; left:0; width:56px; height:56px;
+    object-fit:contain;
   }
+  .h-nom{
+    text-align:center; font-weight:800; font-size:22px; letter-spacing:0.01em; color:#1a3a63;
+  }
+  .header-rule{ border-bottom:3px solid #1a3a63; margin:9px 0 8px; }
   .h-activite{
-    font-size:12px; color:#444; margin-top:6px; font-style:italic; text-align:center;
+    font-size:12px; color:#444; font-style:italic; text-align:center;
   }
 
   .sheet-top{text-align:center; margin-bottom:16px;}
@@ -953,10 +956,9 @@
     return `
           ${co.entete_logo ? `<img class="sheet-watermark" src="${co.entete_logo}">` : ''}
           <div class="sheet-header ${hasHeader?'':'empty'}">
-            <div class="sheet-header-top">
-              ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
-              ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
-            </div>
+            ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
+            ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
+            <div class="header-rule"></div>
             ${co.entete_activite ? `<div class="h-activite">${escapeHTML(co.entete_activite)}</div>` : ''}
           </div>
           <div class="sheet-top"><span class="sheet-title">FACTURE N${escapeHTML(inv.numero)}</span></div>
