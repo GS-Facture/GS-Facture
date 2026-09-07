@@ -16,7 +16,8 @@
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root{
     --bg:#F1EFE8;
@@ -495,24 +496,68 @@
     goList();
   }
 
-  function exportPDF(inv){
-    const el = document.getElementById('pdfSheet');
+  async function exportPDF(inv){
     const btn = document.getElementById('pdfBtn');
-    if(!el || !window.html2pdf) return;
+    if(!window.html2canvas || !window.jspdf){
+      alert("Le générateur de PDF n'a pas pu se charger. Vérifiez votre connexion et réessayez.");
+      return;
+    }
     if(btn){ btn.disabled = true; btn.textContent = 'Génération…'; }
-    const opt = {
-      margin: 6,
-      filename: `Facture_${(inv.numero||'sans-numero').toString().replace(/[^a-zA-Z0-9-_]/g,'')}.pdf`,
-      image: { type:'jpeg', quality:0.98 },
-      html2canvas: { scale:2, useCORS:true },
-      jsPDF: { unit:'mm', format:'a4', orientation:'portrait' }
-    };
-    window.html2pdf().set(opt).from(el).save().then(()=>{
-      if(btn){ btn.disabled=false; btn.textContent='Exporter en PDF'; }
-    }).catch(()=>{
-      if(btn){ btn.disabled=false; btn.textContent='Exporter en PDF'; }
+
+    // On construit une version hors-écran, à largeur "page A4", pour que le PDF
+    // soit propre et complet — indépendamment de la largeur étroite de l'écran mobile.
+    const clone = document.createElement('div');
+    clone.className = 'sheet';
+    clone.style.cssText = 'position:absolute; left:-99999px; top:0; width:780px; background:#fff; padding:28px 26px;';
+    clone.innerHTML = buildSheetHTML(inv);
+    document.body.appendChild(clone);
+
+    try{
+      // Laisse le temps au logo (image) de s'afficher avant la capture.
+      await new Promise(resolve=>{
+        const img = clone.querySelector('img.sheet-logo');
+        if(img && !img.complete){ img.onload = resolve; img.onerror = resolve; setTimeout(resolve, 800); }
+        else{ setTimeout(resolve, 60); }
+      });
+
+      const canvas = await window.html2canvas(clone, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        windowWidth: clone.scrollWidth
+      });
+
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pageW = 210, pageH = 297, margin = 10;
+      const usableW = pageW - margin*2;
+      const usableH = pageH - margin*2;
+      const pxPerMm = canvas.width / usableW;
+      const pageHeightPx = usableH * pxPerMm;
+
+      let sY = 0;
+      let first = true;
+      while(sY < canvas.height){
+        const sliceH = Math.min(pageHeightPx, canvas.height - sY);
+        const pageCanvas = document.createElement('canvas');
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceH;
+        pageCanvas.getContext('2d').drawImage(canvas, 0, sY, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        const sliceHmm = sliceH / pxPerMm;
+        if(!first) pdf.addPage();
+        pdf.addImage(pageCanvas.toDataURL('image/jpeg', 0.97), 'JPEG', margin, margin, usableW, sliceHmm);
+        sY += sliceH;
+        first = false;
+      }
+
+      pdf.save(`Facture_${(inv.numero||'sans-numero').toString().replace(/[^a-zA-Z0-9-_]/g,'')}.pdf`);
+    }catch(e){
+      console.error(e);
       alert("Le PDF n'a pas pu être généré. Réessayez.");
-    });
+    }finally{
+      document.body.removeChild(clone);
+      if(btn){ btn.disabled=false; btn.textContent='Exporter en PDF'; }
+    }
   }
 
   // ---------- Render ----------
@@ -794,22 +839,15 @@
     }
   }
 
-  function renderPreview(app){
-    const inv = state.invoices.find(i=>i.id===state.editingId);
-    if(!inv){ goList(); return; }
+  // Contenu de la facture, réutilisé pour l'aperçu à l'écran ET pour l'export PDF
+  // (garantit que le PDF soit structuré exactement comme le modèle affiché).
+  function buildSheetHTML(inv){
     const t = calcTotals(inv);
     const co = state.company;
     const hasHeader = (co.entete_nom||'').trim() || (co.entete_activite||'').trim() || co.entete_logo;
     const hasFooter = (co.pied_texte||'').trim();
     const montantLettres = nombreEnLettresFR(Math.round(t.ttc));
-
-    app.innerHTML = `
-      <div class="appbar">
-        <button class="back-btn" id="backBtn">‹ Retour</button>
-        <div class="brand" style="margin-top:4px;">Facture N° ${escapeHTML(inv.numero)}</div>
-      </div>
-      <div class="preview-wrap">
-        <div class="sheet" id="pdfSheet">
+    return `
           <div class="sheet-header ${hasHeader?'':'empty'}">
             ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
             <div class="sheet-header-text">
@@ -859,6 +897,21 @@
           </div>
 
           <div class="sheet-footer ${hasFooter?'':'empty'}">${escapeHTML(co.pied_texte||'')}</div>
+    `;
+  }
+
+  function renderPreview(app){
+    const inv = state.invoices.find(i=>i.id===state.editingId);
+    if(!inv){ goList(); return; }
+
+    app.innerHTML = `
+      <div class="appbar">
+        <button class="back-btn" id="backBtn">‹ Retour</button>
+        <div class="brand" style="margin-top:4px;">Facture N° ${escapeHTML(inv.numero)}</div>
+      </div>
+      <div class="preview-wrap">
+        <div class="sheet" id="pdfSheet">
+          ${buildSheetHTML(inv)}
         </div>
         <div class="preview-actions">
           <button class="btn-secondary" id="editBtn">Modifier</button>
