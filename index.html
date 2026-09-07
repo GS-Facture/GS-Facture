@@ -263,8 +263,9 @@
     object-fit:contain;
   }
   .h-nom{
-    text-align:center; font-weight:800; font-size:22px; letter-spacing:0.01em; color:#1a3a63;
+    text-align:center; font-weight:800; font-size:29px; letter-spacing:0.01em; color:#1a3a63;
   }
+  .h-statut{ font-weight:800; font-size:19px; color:#1a3a63; margin-left:5px; }
   .header-rule{ border-bottom:3px solid #1a3a63; margin:9px 0 8px; }
   .h-activite{
     font-size:12px; color:#444; font-style:italic; text-align:center;
@@ -301,9 +302,7 @@
   .sheet-payment{font-size:13px; font-weight:700; margin-bottom:22px;}
 
   .sheet-signature{text-align:center; margin-top:18px;}
-  .sheet-signature .sig-label{font-weight:700; font-size:13px; margin-bottom:24px;}
-  .sheet-signature .sig-nom{color:#1a3a63; font-weight:800; font-size:13px;}
-  .sheet-signature .sig-detail{color:#1a3a63; font-size:10.5px; margin-top:2px; white-space:pre-line; line-height:1.5;}
+  .sheet-signature .sig-label{font-weight:700; font-size:13px; margin-bottom:34px;}
 
   .sheet-footer{
     margin-top:26px; border-top:1.5px solid #111; border-bottom:1.5px solid #111;
@@ -340,7 +339,7 @@
   let state = {
     view: 'list',        // list | form | preview | settings
     invoices: [],
-    company: { entete_nom:'', entete_activite:'', entete_logo:'', pied_texte:'' },
+    company: { entete_nom:'', entete_statut:'', entete_activite:'', entete_logo:'', pied_texte:'' },
     loaded: false,
     editingId: null,
     search: '',
@@ -460,7 +459,7 @@
     }catch(e){ state.invoices = []; }
     try{
       const res2 = await storageGet('company');
-      if(res2 && res2.value) state.company = Object.assign({entete_nom:'',entete_activite:'',entete_logo:'',pied_texte:''}, JSON.parse(res2.value));
+      if(res2 && res2.value) state.company = Object.assign({entete_nom:'',entete_statut:'',entete_activite:'',entete_logo:'',pied_texte:''}, JSON.parse(res2.value));
     }catch(e){ /* pas encore de réglages enregistrés */ }
     state.loaded = true;
     render();
@@ -546,7 +545,7 @@
         if(!Array.isArray(data.invoices)) throw new Error('format invalide');
         if(!confirm(`Importer ${data.invoices.length} facture(s) ? Cela remplacera les données actuelles sur cet appareil.`)) return;
         state.invoices = data.invoices;
-        if(data.company) state.company = Object.assign({entete_nom:'',entete_activite:'',entete_logo:'',pied_texte:''}, data.company);
+        if(data.company) state.company = Object.assign({entete_nom:'',entete_statut:'',entete_activite:'',entete_logo:'',pied_texte:''}, data.company);
         persistInvoices();
         persistCompany();
         alert('Sauvegarde importée avec succès.');
@@ -890,9 +889,15 @@
         </div>
 
         <div class="section-title">En-tête (haut de la facture)</div>
-        <div class="field">
-          <label>Nom de l'entreprise</label>
-          <input id="c-nom" class="upper" value="${escapeAttr(c.entete_nom)}" placeholder="REGRAGA CONSTRUCTION S.A.R.L">
+        <div class="row2">
+          <div class="field" style="flex:2;">
+            <label>Nom de l'entreprise</label>
+            <input id="c-nom" class="upper" value="${escapeAttr(c.entete_nom)}" placeholder="REGRAGA CONSTRUCTION">
+          </div>
+          <div class="field" style="flex:1;">
+            <label>Statut</label>
+            <input id="c-statut" class="upper" value="${escapeAttr(c.entete_statut)}" placeholder="S.A.R.L">
+          </div>
         </div>
         <div class="field">
           <label>Activité / sous-titre</label>
@@ -927,6 +932,7 @@
     `;
     document.getElementById('backBtn').onclick = goList;
     document.getElementById('c-nom').oninput = e=> c.entete_nom = e.target.value.toUpperCase();
+    document.getElementById('c-statut').oninput = e=> c.entete_statut = e.target.value.toUpperCase();
     document.getElementById('c-activite').oninput = e=> c.entete_activite = e.target.value;
     document.getElementById('c-pied').oninput = e=> c.pied_texte = e.target.value;
     document.getElementById('saveCompanyBtn').onclick = saveCompany;
@@ -957,7 +963,7 @@
           ${co.entete_logo ? `<img class="sheet-watermark" src="${co.entete_logo}">` : ''}
           <div class="sheet-header ${hasHeader?'':'empty'}">
             ${co.entete_logo ? `<img class="sheet-logo" src="${co.entete_logo}">` : ''}
-            ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
+            ${co.entete_nom ? `<div class="h-nom">${escapeHTML(co.entete_nom)}${co.entete_statut ? ` <span class="h-statut">${escapeHTML(co.entete_statut)}</span>` : ''}</div>` : ''}
             <div class="header-rule"></div>
             ${co.entete_activite ? `<div class="h-activite">${escapeHTML(co.entete_activite)}</div>` : ''}
           </div>
@@ -998,7 +1004,6 @@
 
           <div class="sheet-signature">
             <div class="sig-label">Signature :</div>
-            ${co.entete_nom ? `<div class="sig-nom">${escapeHTML(co.entete_nom)}</div>` : ''}
           </div>
 
           <div class="sheet-footer ${hasFooter?'':'empty'}">${escapeHTML(co.pied_texte||'')}</div>
